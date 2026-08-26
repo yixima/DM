@@ -1,0 +1,10 @@
+[Unit]
+Description=DM 問い合わせフォーム定期送信（毎週水曜・金曜 11:00 JST）
+
+[Timer]
+OnCalendar=Wed,Fri *-*-* 11:00:00
+Persistent=true
+RandomizedDelaySec=1800
+
+[Install]
+WantedBy=timers.target

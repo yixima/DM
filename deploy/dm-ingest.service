@@ -1,0 +1,12 @@
+[Unit]
+Description=DM バウンス・配信停止の取り込み
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/dm
+ExecStart=/opt/dm/scripts/periodic_run.sh ingest
+User=dm
+Group=dm
+EnvironmentFile=-/opt/dm/.env

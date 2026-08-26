@@ -1,0 +1,14 @@
+[Unit]
+Description=DM 定期メール配信
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/dm
+ExecStart=/opt/dm/scripts/periodic_run.sh email --live
+User=dm
+Group=dm
+# .env に SMTP パスワード等が入る。ファイル権限は 600 にしておくこと。
+EnvironmentFile=-/opt/dm/.env
+Nice=10

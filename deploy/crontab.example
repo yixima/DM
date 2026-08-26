@@ -1,0 +1,13 @@
+# cron を使う場合の例（systemd timer が使えない環境向け）。
+# TZ を明示しないと UTC で動く環境があるので必ず書く。
+TZ=Asia/Tokyo
+
+# 毎日 8:00  バウンス・配信停止の取り込み
+#   これを止めると、配信停止の申し出を見落として送り続けることになる。最優先で回す。
+0 8 * * *    /opt/dm/scripts/periodic_run.sh ingest
+
+# 毎週火曜 10:00  メール配信
+0 10 * * 2   /opt/dm/scripts/periodic_run.sh email --live
+
+# 毎週水・金 11:00  問い合わせフォーム送信
+0 11 * * 3,5 /opt/dm/scripts/periodic_run.sh form --live

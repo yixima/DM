@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+*.sqlite3
+*.sqlite3-journal
+
+# 実行状態（送信履歴・証跡・書き出し）は一切コミットしない
+state/*
+!state/.gitkeep
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/

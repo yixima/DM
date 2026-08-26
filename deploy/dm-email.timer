@@ -1,0 +1,11 @@
+[Unit]
+Description=DM 定期メール配信（毎週火曜 10:00 JST）
+
+[Timer]
+# JST で解釈させるため、システムのタイムゾーンを Asia/Tokyo にしておくこと
+OnCalendar=Tue *-*-* 10:00:00
+Persistent=true
+RandomizedDelaySec=900
+
+[Install]
+WantedBy=timers.target

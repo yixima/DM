@@ -1,0 +1,45 @@
+# 定期案内キャンペーン。
+# steps を上から順に、1宛先につき1回の実行で1つずつ配信する。
+# delay_days は「直前のコンテンツが届いてから、次を送るまでの最短日数」。
+key: intro_2026autumn
+name: 2026年秋 新規ご案内シリーズ
+enabled: true
+channels: [email, form]
+
+# 最終ステップまで届いたら終了。年1回まわしたい場合は repeat_cycle: true にする。
+repeat_cycle: false
+cycle_gap_days: 365
+
+segment:
+  ranks: [A, B]
+  exclude_freemail: false
+  exclude_domain_mismatch: false
+  exclude_domains: []
+  contact_types: []          # 空なら全種別
+
+limits:
+  max_per_run: 150           # 1回の実行で送る上限
+  max_per_domain_per_run: 1
+  min_interval_days_between_touches: 14
+
+steps:
+  - key: s1_intro
+    delay_days: 0
+    subject: "【ご案内】{{ company_name }}のお問い合わせ・受注対応を効率化するご提案"
+    body_text: email/intro_s1.txt.j2
+    form_subject: "サービスのご案内"
+    form_body: form/intro_s1.txt.j2
+
+  - key: s2_cases
+    delay_days: 21
+    subject: "【導入事例】少人数の体制で対応時間を月40時間削減した方法"
+    body_text: email/intro_s2.txt.j2
+    form_subject: "導入事例のご紹介"
+    form_body: form/intro_s2.txt.j2
+
+  - key: s3_seminar
+    delay_days: 28
+    subject: "【無料・オンライン】45分でわかる問い合わせ対応の自動化 説明会のご案内"
+    body_text: email/intro_s3.txt.j2
+    form_subject: "無料オンライン説明会のご案内"
+    form_body: form/intro_s3.txt.j2

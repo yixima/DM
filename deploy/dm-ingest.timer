@@ -1,0 +1,9 @@
+[Unit]
+Description=DM バウンス・配信停止の取り込み（毎日 8:00 JST）
+
+[Timer]
+OnCalendar=*-*-* 08:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

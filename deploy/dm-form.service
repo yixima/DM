@@ -1,0 +1,15 @@
+[Unit]
+Description=DM 問い合わせフォーム定期送信
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/dm
+ExecStart=/opt/dm/scripts/periodic_run.sh form --live
+User=dm
+Group=dm
+EnvironmentFile=-/opt/dm/.env
+Nice=10
+# 1件あたり数十秒かかることがあるため、余裕を持たせる
+TimeoutStartSec=7200

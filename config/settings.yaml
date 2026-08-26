@@ -1,0 +1,57 @@
+# システム全体の既定値。秘密情報は .env / 環境変数に置く（このファイルには書かない）。
+paths:
+  contacts_csv: data/master_contacts_20260825_181226.csv
+  db: state/dm.sqlite3
+  outbox: state/outbox
+  evidence: state/evidence
+  logs: state/logs
+  campaigns: config/campaigns
+  templates: templates
+
+sending:
+  # console = 画面出力のみ / file = .eml を outbox に保存 / smtp = 実送信
+  transport: console
+  # 同一相手に対する最短接触間隔（メール・フォーム横断）。過剰接触の防止。
+  global_min_interval_days: 14
+  # この時間帯は送信しない（開始時, 終了時）。21時〜翌8時は停止。
+  quiet_hours: [21, 8]
+  timezone: Asia/Tokyo
+
+quality:
+  # フリーメール宛（flag_freemail=1）を除外するか
+  exclude_freemail: false
+  # 会社ドメインとメールドメインが不一致（flag_domain_mismatch=1）を除外するか
+  exclude_domain_mismatch: false
+
+email_limits:
+  max_per_run: 200          # 1回の実行で送る上限
+  max_per_hour: 120         # 1時間あたりの上限（レピュテーション保護）
+  min_seconds_between_sends: 2.0
+  jitter_seconds: 1.5
+  max_per_domain_per_run: 1 # 同一ドメインへは1回の実行で1通まで
+
+form_limits:
+  max_per_run: 60
+  min_seconds_between_submits: 8.0
+  jitter_seconds: 4.0
+  max_per_domain_per_day: 1
+  page_timeout_ms: 30000
+  respect_robots: true      # robots.txt で禁止されたパスには送信しない
+  user_agent: ""            # 空なら Chromium 既定 + 連絡先を付記
+
+# 問い合わせフォームの各欄に入力する自社情報。
+# 未設定の項目は sender / 環境変数(DM_SENDER_*) から補完される。
+form_profile:
+  company: ""
+  person_sei: ""      # 例: 山田
+  person_mei: ""      # 例: 太郎
+  kana_sei: ""        # 例: ヤマダ
+  kana_mei: ""        # 例: タロウ
+  department: ""      # 例: 営業部
+  email: ""
+  phone: ""
+  fax: ""
+  zip: ""             # 例: 100-0001
+  prefecture: ""      # 例: 東京都
+  address: ""
+  url: ""

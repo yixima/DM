@@ -1,0 +1,26 @@
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+本メールは、貴社ウェブサイト等で公開されているお問い合わせ先に、
+{{ sender.name }}よりご案内をお送りしております。
+
+■ 配信停止について
+今後のご案内が不要な場合は、下記より配信停止のお手続きをお願いいたします。
+以後、当方から貴社へのご案内は停止いたします。
+{% if unsubscribe_url %}
+  配信停止フォーム: {{ unsubscribe_url }}
+{% endif %}
+{% if unsubscribe_email %}
+  配信停止メール　: {{ unsubscribe_email }} 宛に空メールでも承ります
+{% endif %}
+
+■ 送信者
+  {{ sender.name }}
+{% if sender.person %}
+  {{ sender.person }}
+{% endif %}
+  {{ sender.address }}
+{% if sender.phone %}
+  TEL: {{ sender.phone }}
+{% endif %}
+  Mail: {{ sender.email }}
+  Web : {{ sender.url }}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

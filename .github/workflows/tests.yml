@@ -1,0 +1,44 @@
+name: tests
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 依存関係のインストール
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,form]"
+
+      - name: Chromium のインストール
+        run: python -m playwright install --with-deps chromium
+
+      - name: テスト
+        run: python -m pytest -q
+
+      - name: キャンペーン定義と文面の検証（送信はしない）
+        env:
+          DM_SENDER_NAME: CI検証株式会社
+          DM_SENDER_PERSON: 検証 太郎
+          DM_SENDER_EMAIL: ci@example.com
+          DM_SENDER_PHONE: 03-0000-0000
+          DM_SENDER_ADDRESS: 東京都千代田区1-1-1
+          DM_SENDER_URL: https://example.com/
+          DM_UNSUBSCRIBE_BASE_URL: https://example.com/unsubscribe
+          DM_UNSUBSCRIBE_EMAIL: unsubscribe@example.com
+          DM_UNSUBSCRIBE_SECRET: ci-only-secret
+        run: |
+          python -m dm.cli import
+          python -m dm.cli preview --campaign intro_2026autumn --channel email > /dev/null
+          python -m dm.cli preview --campaign intro_2026autumn --channel form  > /dev/null
+          python -m dm.cli doctor
