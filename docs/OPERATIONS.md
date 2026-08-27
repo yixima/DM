@@ -75,11 +75,23 @@ python -m dm.cli form --campaign intro_2026autumn --live --limit 5
 
 ### ステップ6: 定期実行を有効化
 
+macOS の場合:
+
+```bash
+bash deploy/macos/install.sh
+launchctl list | grep jp.dm
+```
+
+Linux の場合:
+
 ```bash
 sudo cp deploy/dm-*.service deploy/dm-*.timer /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now dm-ingest.timer dm-email.timer dm-form.timer
+sudo systemctl enable --now dm-refresh.timer dm-ingest.timer dm-email.timer dm-form.timer
 ```
+
+いずれも **7:00 取り込み → 8:00 バウンス処理 → 10:00 メール → 11:00 フォーム** の順です。
+取り込みを配信より先に置くこと。逆順だと古いリストで送ることになります。
 
 ---
 

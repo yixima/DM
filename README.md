@@ -189,12 +189,23 @@ python -m dm.cli suppress --list
 
 `scripts/periodic_run.sh` が入口です（多重起動を `flock` で防ぎ、ログと要対応CSVを毎回出力）。
 
-**systemd（推奨）**
+**macOS（launchd）**
+
+```bash
+bash deploy/macos/install.sh          # 登録
+launchctl list | grep jp.dm           # 確認
+bash deploy/macos/install.sh --uninstall   # 解除
+```
+
+ログイン中のユーザーとして動きます。**配信時刻に Mac がスリープ・電源オフだとその回は実行されません。**
+配信の時間帯は Mac を開いておく運用にしてください。
+
+**Linux（systemd）**
 
 ```bash
 sudo cp deploy/dm-*.service deploy/dm-*.timer /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now dm-ingest.timer dm-email.timer dm-form.timer
+sudo systemctl enable --now dm-refresh.timer dm-ingest.timer dm-email.timer dm-form.timer
 systemctl list-timers 'dm-*'
 ```
 
@@ -202,6 +213,7 @@ systemctl list-timers 'dm-*'
 
 | | タイミング | 内容 |
 |---|---|---|
+| `dm-refresh` | 毎日 7:00 | リストの取り込み＋ドメイン検証 |
 | `dm-ingest` | 毎日 8:00 | バウンス・配信停止の取り込み |
 | `dm-email` | 毎週火曜 10:00 | メール配信 |
 | `dm-form` | 毎週水・金 11:00 | フォーム送信 |
