@@ -32,6 +32,13 @@ COMMON_DKIM_SELECTORS = (
 
 DOH_ENDPOINT = "https://dns.google/resolve"
 
+# 会社の代表窓口として共用されがちなローカルパート。
+# ここからDMを送ると、苦情の影響が取引先とのやりとりにも及ぶ。
+SHARED_LOCALPARTS = {
+    "info", "contact", "inquiry", "otoiawase", "office", "mail", "admin",
+    "support", "sales", "eigyo", "post", "postmaster", "webmaster", "hello",
+}
+
 
 @dataclass
 class Check:
@@ -276,6 +283,27 @@ def check_from_alignment(settings: Settings) -> Check:
     return Check(name, "ok", f"すべて {sender_domain} で揃っています")
 
 
+def check_dedicated_sender(settings: Settings) -> Check:
+    """DM専用の送信アドレスを使っているか。
+
+    Gmail は用途ごとに From アドレスを分けることを推奨している。
+    代表アドレスから送ると、苦情が増えたときに通常の業務メールも巻き込まれる。
+      https://support.google.com/a/answer/81126
+    """
+    name = "DM専用の送信アドレス"
+    email = settings.sender.email.strip().lower()
+    if not email or "@" not in email:
+        return Check(name, "ng", "送信元メールアドレスが未設定です", "DM_SENDER_EMAIL を設定してください。")
+    local = email.split("@", 1)[0]
+    if local in SHARED_LOCALPARTS:
+        return Check(
+            name, "warn", f"代表窓口として共用されがちなアドレスです（{email}）",
+            "このDM専用のアドレス（例: pr@ / news@ / dm@）を用意すると、"
+            "苦情が増えても取引先とのやりとりが巻き込まれにくくなります。",
+        )
+    return Check(name, "ok", f"{email}（代表窓口とは別のアドレス）")
+
+
 def check_daily_volume(sent_today: int, settings: Settings) -> Check:
     """1日あたりの送信量。5,000通を超えると Gmail の要求水準が上がる。"""
     name = "1日あたりの送信量"
@@ -297,6 +325,7 @@ def run_checks(
 ) -> DeliverabilityReport:
     domain = _domain_of(settings.sender.email)
     report = DeliverabilityReport()
+    report.checks.append(check_dedicated_sender(settings))
     report.checks.append(check_from_alignment(settings))
     if domain:
         report.checks.append(check_spf(domain, timeout))

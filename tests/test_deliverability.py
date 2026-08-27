@@ -165,3 +165,30 @@ def test_dry_run_does_not_consume_the_daily_budget(conn, settings, campaign):
         conn, campaign, settings, dry_run=False, transport_override="file", ignore_quiet_hours=True
     )
     assert live.sent == 1
+
+
+# ---------------------------------------------------------------- 専用送信アドレス
+
+def test_shared_representative_address_is_flagged(settings):
+    for local in ("info", "contact", "support", "sales", "otoiawase"):
+        settings.sender.email = f"{local}@test.example.jp"
+        check = dl.check_dedicated_sender(settings)
+        assert check.status == "warn", local
+        assert "共用されがち" in check.detail
+
+
+def test_dedicated_address_passes(settings):
+    for local in ("pr", "news", "dm", "info-campaign"):
+        settings.sender.email = f"{local}@test.example.jp"
+        assert dl.check_dedicated_sender(settings).status == "ok", local
+
+
+def test_missing_sender_address_is_a_failure(settings):
+    settings.sender.email = ""
+    assert dl.check_dedicated_sender(settings).status == "ng"
+
+
+def test_dedicated_sender_check_is_part_of_the_report(fake_dns, settings):
+    fake_dns({}, unreachable=True)
+    names = [c.name for c in dl.run_checks(settings, sent_today=0).checks]
+    assert "DM専用の送信アドレス" in names
