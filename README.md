@@ -373,12 +373,14 @@ Mailchimp・Benchmark Email などの配信サービスは、**ウェブサイ�
 リストが別の場所（別セッション・別担当者）で更新され続ける場合、そのフォルダを
 監視して**いちばん新しいCSVを自動で取り込めます**。
 
-```yaml
-# config/settings.yaml
-paths:
-  contacts_dir: /Users/<ユーザー名>/Shared/dm-lists   # 書き出し先フォルダ
-  contacts_glob: "master_contacts_*.csv"             # 対象のファイル名
+`.env` に1行足すのがいちばん簡単です。
+
+```bash
+DM_CONTACTS_DIR="/Users/<ユーザー名>/Shared/dm-lists"
+DM_CONTACTS_GLOB="master_contacts_*.csv"      # 省略可
 ```
+
+`config/settings.yaml` の `paths.contacts_dir` に書いても同じです（環境変数が優先）。
 
 ```bash
 python -m dm.cli import                    # フォルダ内の最新CSVを取り込む

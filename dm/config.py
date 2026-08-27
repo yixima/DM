@@ -183,6 +183,14 @@ class Settings:
             path.mkdir(parents=True, exist_ok=True)
 
 
+def _optional_path(value: Any) -> Path | None:
+    """設定されていなければ None。相対パスはリポジトリ基準で解決する。"""
+    if not value:
+        return None
+    path = Path(str(value)).expanduser()
+    return path if path.is_absolute() else (ROOT / path)
+
+
 def _path(value: Any, default: Path) -> Path:
     if not value:
         return default
@@ -210,8 +218,8 @@ def load_settings(settings_path: Path | None = None) -> Settings:
 
     settings = Settings(
         contacts_csv=_path(paths.get("contacts_csv"), Settings.contacts_csv),
-        contacts_dir=(_path(paths.get("contacts_dir"), ROOT) if paths.get("contacts_dir") else None),
-        contacts_glob=str(paths.get("contacts_glob") or Settings.contacts_glob),
+        contacts_dir=_optional_path(_env("DM_CONTACTS_DIR") or paths.get("contacts_dir")),
+        contacts_glob=_env("DM_CONTACTS_GLOB") or str(paths.get("contacts_glob") or Settings.contacts_glob),
         max_shrink_percent=float(quality.get("max_shrink_percent", 20.0)),
         db_path=_path(paths.get("db"), Settings.db_path),
         outbox_dir=_path(paths.get("outbox"), Settings.outbox_dir),

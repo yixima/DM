@@ -97,3 +97,35 @@ def test_growth_is_never_refused(conn, tmp_path):
 def test_first_import_has_nothing_to_compare(conn, tmp_path):
     summary = import_contacts(conn, make_csv(tmp_path / "first.csv", 3), max_shrink_percent=20)
     assert summary["contacts"] == 3
+
+
+def test_contacts_dir_can_come_from_the_environment(monkeypatch, tmp_path):
+    """.env に1行足すだけで監視フォルダを指定できる（設定ファイルの書き換え不要）。"""
+    from dm.config import load_settings
+
+    folder = tmp_path / "shared lists"
+    folder.mkdir()
+    monkeypatch.setenv("DM_CONTACTS_DIR", str(folder))
+    monkeypatch.setenv("DM_CONTACTS_GLOB", "list_*.csv")
+
+    settings = load_settings()
+    assert settings.contacts_dir == folder
+    assert settings.contacts_glob == "list_*.csv"
+
+
+def test_contacts_dir_is_none_when_unset(monkeypatch):
+    from dm.config import load_settings
+
+    monkeypatch.delenv("DM_CONTACTS_DIR", raising=False)
+    settings = load_settings()
+    assert settings.contacts_dir is None
+
+
+def test_tilde_in_the_path_is_expanded(monkeypatch):
+    from dm.config import load_settings
+
+    monkeypatch.setenv("DM_CONTACTS_DIR", "~/Shared/dm-lists")
+    settings = load_settings()
+    assert settings.contacts_dir is not None
+    assert "~" not in str(settings.contacts_dir)
+    assert settings.contacts_dir.is_absolute()
