@@ -57,6 +57,9 @@ class Campaign:
     segment: Segment = field(default_factory=Segment)
     limits: Limits = field(default_factory=Limits)
     enabled: bool = True
+    # 複数シリーズを同時に回すときの優先度。数字が大きいほど先に宛先を確保する。
+    # 同じ相手が2シリーズの対象になったとき、優先度の高い方だけが今回送られる。
+    priority: int = 50
     repeat_cycle: bool = False          # 最終 step の後、先頭に戻すか
     cycle_gap_days: int = 180
     path: Path | None = None
@@ -117,6 +120,7 @@ def load_campaign(path: Path) -> Campaign:
         channels=channels,
         steps=steps,
         enabled=bool(raw.get("enabled", True)),
+        priority=int(raw.get("priority", 50)),
         repeat_cycle=bool(raw.get("repeat_cycle", False)),
         cycle_gap_days=int(raw.get("cycle_gap_days", 180)),
         segment=Segment(

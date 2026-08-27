@@ -116,6 +116,17 @@ python -m dm.cli send --campaign intro_2026autumn --live --limit 30
 `config/campaigns/` に YAML を追加し、`templates/` に本文を置くだけです。
 既存キャンペーンは `enabled: false` にすれば止まります。
 
+**既存シリーズに割り込ませる**
+
+新しい YAML に `priority:` を既存より大きい値（例 `90`）で書き、`--campaign all` で回します。
+割り込み側が先に宛先を確保し、既存シリーズはその相手を次回に回します。
+既存シリーズも毎回いくらか進めたい場合は、割り込み側に `max_per_run` を設定して取り分を制限します。
+
+```bash
+python -m dm.cli plan --campaign all --channel email    # 取り分を事前に確認
+python -m dm.cli send --campaign all --live
+```
+
 **リストを更新する**
 
 新しい CSV を `data/` に置いて `dm import --csv data/新しいファイル.csv`。

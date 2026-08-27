@@ -162,20 +162,20 @@ def _next_step(campaign: Campaign, done: dict[str, str], now: datetime) -> tuple
     return campaign.steps[0], None
 
 
-def select(
+def _gather_candidates(
     conn: sqlite3.Connection,
     campaign: Campaign,
     channel: str,
     settings: Settings,
-    *,
-    limit: int | None = None,
-    now: datetime | None = None,
-    only_contact_ids: list[int] | None = None,
-) -> SelectionReport:
-    if channel not in campaign.channels:
-        raise ValueError(f"キャンペーン {campaign.key} はチャネル {channel} に対応していません")
+    now: datetime,
+    only_contact_ids: list[int] | None,
+    skip,
+) -> list[tuple[int, float, int, sqlite3.Row, Step]]:
+    """このキャンペーンで送る資格のある宛先を、優先度順に並べて返す。
 
-    now = now or datetime.now(timezone.utc)
+    ここでは件数の上限をかけない。上限は呼び出し側が（単独／複数キャンペーンの
+    どちらで動いているかに応じて）かける。
+    """
     target_column = "contact_email" if channel == "email" else "contact_form_url"
     ok_column = "email_ok" if channel == "email" else "form_ok"
 
@@ -196,19 +196,6 @@ def select(
     min_interval = settings.global_min_interval_days
     if campaign.limits.min_interval_days_between_touches is not None:
         min_interval = max(min_interval, campaign.limits.min_interval_days_between_touches)
-    per_domain_cap = (
-        campaign.limits.max_per_domain_per_run
-        if campaign.limits.max_per_domain_per_run is not None
-        else (settings.email_limits.max_per_domain_per_run if channel == "email" else 1)
-    )
-    run_cap = limit or campaign.limits.max_per_run or (
-        settings.email_limits.max_per_run if channel == "email" else settings.form_limits.max_per_run
-    )
-
-    skipped: dict[str, int] = {}
-
-    def skip(reason: str) -> None:
-        skipped[reason] = skipped.get(reason, 0) + 1
 
     candidates: list[tuple[int, float, int, sqlite3.Row, Step]] = []
     for row in rows:
@@ -235,28 +222,116 @@ def select(
         if done and since_touch < min_interval:
             skip("最短接触間隔の待機中")
             continue
+        # 別キャンペーンで最近接触した相手も、同じ下限で待たせる
+        if not done and since_touch < min_interval:
+            skip("他シリーズで接触済み（間隔待ち）")
+            continue
         if channel == "form" and form_today.get(host_of(target), 0) >= settings.form_limits.max_per_domain_per_day:
             skip("同一サイトへの1日上限")
             continue
 
         rank_order = 0 if (row["rank"] or "") == "A" else 1
         # 未接触(inf)を先に、次に最後の接触が古い順
-        recency = -since_touch
-        candidates.append((rank_order, recency, cid, row, step))
+        candidates.append((rank_order, -since_touch, cid, row, step))
 
     candidates.sort(key=lambda item: (item[0], item[1], item[2]))
+    return candidates
+
+
+def _per_domain_cap(campaign: Campaign, channel: str, settings: Settings) -> int:
+    if campaign.limits.max_per_domain_per_run is not None:
+        return campaign.limits.max_per_domain_per_run
+    return settings.email_limits.max_per_domain_per_run if channel == "email" else 1
+
+
+def _run_cap(campaign: Campaign, channel: str, settings: Settings, limit: int | None) -> int:
+    if limit:
+        return limit
+    if campaign.limits.max_per_run:
+        return campaign.limits.max_per_run
+    return settings.email_limits.max_per_run if channel == "email" else settings.form_limits.max_per_run
+
+
+def select(
+    conn: sqlite3.Connection,
+    campaign: Campaign,
+    channel: str,
+    settings: Settings,
+    *,
+    limit: int | None = None,
+    now: datetime | None = None,
+    only_contact_ids: list[int] | None = None,
+    claimed: set[int] | None = None,
+    domain_used: dict[str, int] | None = None,
+) -> SelectionReport:
+    """1つのキャンペーンについて、今回送る宛先を決める。
+
+    claimed / domain_used を渡すと、複数キャンペーンをまたいで
+    「同じ相手・同じドメインに二重に送らない」状態を共有できる。
+    """
+    if channel not in campaign.channels:
+        raise ValueError(f"キャンペーン {campaign.key} はチャネル {channel} に対応していません")
+
+    now = now or datetime.now(timezone.utc)
+    target_column = "contact_email" if channel == "email" else "contact_form_url"
+
+    skipped: dict[str, int] = {}
+
+    def skip(reason: str) -> None:
+        skipped[reason] = skipped.get(reason, 0) + 1
+
+    candidates = _gather_candidates(conn, campaign, channel, settings, now, only_contact_ids, skip)
+
+    cap = _run_cap(campaign, channel, settings, limit)
+    per_domain = _per_domain_cap(campaign, channel, settings)
+    claimed = claimed if claimed is not None else set()
+    domain_used = domain_used if domain_used is not None else {}
 
     plans: list[Plan] = []
-    domain_used: dict[str, int] = {}
-    for _, _, _, row, step in candidates:
-        if len(plans) >= run_cap:
+    for _, _, cid, row, step in candidates:
+        if cid in claimed:
+            skip("同じ実行で他シリーズが先に確保")
+            continue
+        if len(plans) >= cap:
             skip("今回の上限に到達（次回に繰越）")
             continue
         domain = (row["domain"] or host_of(row[target_column] or "")).lower()
-        if domain and domain_used.get(domain, 0) >= per_domain_cap:
+        if domain and domain_used.get(domain, 0) >= per_domain:
             skip("同一ドメインの1回あたり上限")
             continue
         domain_used[domain] = domain_used.get(domain, 0) + 1
+        claimed.add(cid)
         plans.append(Plan(contact=row, step=step, channel=channel, target=str(row[target_column]).strip()))
 
     return SelectionReport(plans=plans, skipped=skipped)
+
+
+def select_across(
+    conn: sqlite3.Connection,
+    campaigns: list[Campaign],
+    channel: str,
+    settings: Settings,
+    *,
+    limit: int | None = None,
+    now: datetime | None = None,
+) -> list[tuple[Campaign, SelectionReport]]:
+    """複数のシリーズを1回の実行でまとめて計画する。
+
+    優先度（priority）の高いシリーズから先に宛先を確保する。同じ相手が2つの
+    シリーズの対象になった場合、優先度の高い方だけが今回送り、もう一方は次回に回る。
+    """
+    now = now or datetime.now(timezone.utc)
+    runnable = [c for c in campaigns if c.enabled and channel in c.channels]
+    runnable.sort(key=lambda c: (-c.priority, c.key))
+
+    claimed: set[int] = set()
+    domain_used: dict[str, int] = {}
+    results: list[tuple[Campaign, SelectionReport]] = []
+
+    for campaign in runnable:
+        report = select(
+            conn, campaign, channel, settings,
+            limit=limit, now=now, claimed=claimed, domain_used=domain_used,
+        )
+        results.append((campaign, report))
+    return results

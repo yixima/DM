@@ -20,15 +20,20 @@ from .compliance import check_email_body, check_form_body, check_settings
 from .config import Settings, load_settings
 from .db import add_suppression, init_db, load_suppressions
 from .importer import import_contacts
-from .mailer import SendAborted, run_email_campaign
+from .mailer import SendAborted, run_email_campaign, run_email_campaigns
 from .preview_html import write_preview_html
 from .render import build_env, render_email, render_form, verify_unsubscribe_token
-from .selector import select
+from .selector import select, select_across
 
 
 def _open(settings: Settings) -> sqlite3.Connection:
     settings.ensure_dirs()
     return init_db(settings.db_path)
+
+
+def _is_all(value: str) -> bool:
+    """--campaign all で、有効なシリーズをまとめて対象にする。"""
+    return (value or "").strip().lower() == "all"
 
 
 def _print_result(result) -> None:
@@ -200,32 +205,55 @@ def cmd_preview(args, settings: Settings) -> int:
     return 0
 
 
+def _show_plan(campaign_key: str, channel: str, result, show: int) -> None:
+    print(f"[{campaign_key} / {channel}] {result.summary()}")
+    for plan in result.plans[:show]:
+        print(f"  {plan.step.key:12s} {plan.company[:28]:30s} {plan.target}")
+    if len(result.plans) > show:
+        print(f"  ... 他 {len(result.plans) - show} 件")
+
+
 def cmd_plan(args, settings: Settings) -> int:
     conn = _open(settings)
+    if _is_all(args.campaign):
+        campaigns = list(load_campaigns(settings.campaign_dir).values())
+        planned = select_across(conn, campaigns, args.channel, settings, limit=args.limit)
+        if not planned:
+            print(f"チャネル {args.channel} に対応した有効なシリーズがありません")
+        total = 0
+        for campaign, result in planned:
+            _show_plan(campaign.key, args.channel, result, args.show)
+            total += len(result.plans)
+            print()
+        print(f"合計 {total} 件（優先度の高いシリーズから順に確保）")
+        conn.close()
+        return 0
+
     campaign = get_campaign(settings.campaign_dir, args.campaign)
     result = select(conn, campaign, args.channel, settings, limit=args.limit)
-    print(f"[{campaign.key} / {args.channel}] {result.summary()}")
-    for plan in result.plans[: args.show]:
-        print(f"  {plan.step.key:12s} {plan.company[:28]:30s} {plan.target}")
-    if len(result.plans) > args.show:
-        print(f"  ... 他 {len(result.plans) - args.show} 件")
+    _show_plan(campaign.key, args.channel, result, args.show)
     conn.close()
     return 0
 
 
 def cmd_send(args, settings: Settings) -> int:
     conn = _open(settings)
-    campaign = get_campaign(settings.campaign_dir, args.campaign)
+    common = dict(
+        dry_run=not args.live,
+        limit=args.limit,
+        transport_override=args.transport,
+        ignore_quiet_hours=args.ignore_quiet_hours,
+    )
     try:
-        result = run_email_campaign(
-            conn, campaign, settings,
-            dry_run=not args.live,
-            limit=args.limit,
-            transport_override=args.transport,
-            ignore_quiet_hours=args.ignore_quiet_hours,
-        )
+        if _is_all(args.campaign):
+            campaigns = list(load_campaigns(settings.campaign_dir).values())
+            result = run_email_campaigns(conn, campaigns, settings, **common)
+        else:
+            campaign = get_campaign(settings.campaign_dir, args.campaign)
+            result = run_email_campaign(conn, campaign, settings, **common)
     except SendAborted as exc:
         print(f"中止しました: {exc}", file=sys.stderr)
+        conn.close()
         return 2
     _print_result(result)
     conn.close()
@@ -234,23 +262,29 @@ def cmd_send(args, settings: Settings) -> int:
 
 def cmd_form(args, settings: Settings) -> int:
     from .formbot import PlaywrightUnavailable
-    from .formrunner import run_form_campaign
+    from .formrunner import run_form_campaign, run_form_campaigns
 
     conn = _open(settings)
-    campaign = get_campaign(settings.campaign_dir, args.campaign)
+    common = dict(
+        dry_run=not args.live,
+        limit=args.limit,
+        headless=not args.no_headless,
+        ignore_quiet_hours=args.ignore_quiet_hours,
+    )
     try:
-        result = run_form_campaign(
-            conn, campaign, settings,
-            dry_run=not args.live,
-            limit=args.limit,
-            headless=not args.no_headless,
-            ignore_quiet_hours=args.ignore_quiet_hours,
-        )
+        if _is_all(args.campaign):
+            campaigns = list(load_campaigns(settings.campaign_dir).values())
+            result = run_form_campaigns(conn, campaigns, settings, **common)
+        else:
+            campaign = get_campaign(settings.campaign_dir, args.campaign)
+            result = run_form_campaign(conn, campaign, settings, **common)
     except SendAborted as exc:
         print(f"中止しました: {exc}", file=sys.stderr)
+        conn.close()
         return 2
     except PlaywrightUnavailable as exc:
         print(f"中止しました: {exc}", file=sys.stderr)
+        conn.close()
         return 3
     _print_result(result)
     conn.close()
@@ -260,13 +294,14 @@ def cmd_form(args, settings: Settings) -> int:
 def cmd_run(args, settings: Settings) -> int:
     """定期実行の入口。設定されたチャネルを順に回す。"""
     channels = [c.strip() for c in args.channels.split(",") if c.strip()]
-    campaign = get_campaign(settings.campaign_dir, args.campaign)
+    campaign = None if _is_all(args.campaign) else get_campaign(settings.campaign_dir, args.campaign)
     exit_code = 0
     for channel in channels:
-        if channel not in campaign.channels:
+        if campaign is not None and channel not in campaign.channels:
             print(f"[{channel}] キャンペーン {campaign.key} は未対応のためスキップします")
             continue
-        print(f"\n===== {campaign.key} / {channel} =====")
+        label = campaign.key if campaign else "全シリーズ"
+        print(f"\n===== {label} / {channel} =====")
         sub = argparse.Namespace(
             campaign=args.campaign, limit=args.limit, live=args.live,
             transport=args.transport, ignore_quiet_hours=args.ignore_quiet_hours,
@@ -411,14 +446,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_preview)
 
     p = sub.add_parser("plan", help="今回の実行で誰に何が送られるかを表示する（送信しない）")
-    p.add_argument("--campaign", required=True)
+    p.add_argument("--campaign", required=True, help="キャンペーンキー、または all（有効な全シリーズ）")
     p.add_argument("--channel", choices=["email", "form"], default="email")
     p.add_argument("--limit", type=int)
     p.add_argument("--show", type=int, default=20)
     p.set_defaults(func=cmd_plan)
 
     p = sub.add_parser("send", help="メールを配信する（既定は dry-run）")
-    p.add_argument("--campaign", required=True)
+    p.add_argument("--campaign", required=True, help="キャンペーンキー、または all（有効な全シリーズ）")
     p.add_argument("--limit", type=int)
     p.add_argument("--live", action="store_true", help="実際に送信する")
     p.add_argument("--transport", choices=["console", "file", "smtp"])
@@ -426,7 +461,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_send)
 
     p = sub.add_parser("form", help="問い合わせフォームへ送信する（既定は入力のみの dry-run）")
-    p.add_argument("--campaign", required=True)
+    p.add_argument("--campaign", required=True, help="キャンペーンキー、または all（有効な全シリーズ）")
     p.add_argument("--limit", type=int)
     p.add_argument("--live", action="store_true", help="実際に送信ボタンを押す")
     p.add_argument("--no-headless", action="store_true", help="ブラウザを画面表示する（デバッグ用）")
@@ -434,7 +469,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_form)
 
     p = sub.add_parser("run", help="定期実行（メール・フォームをまとめて）")
-    p.add_argument("--campaign", required=True)
+    p.add_argument("--campaign", required=True, help="キャンペーンキー、または all（有効な全シリーズ）")
     p.add_argument("--channels", default="email,form")
     p.add_argument("--limit", type=int)
     p.add_argument("--live", action="store_true")
