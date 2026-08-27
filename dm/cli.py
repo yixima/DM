@@ -21,6 +21,7 @@ from .config import Settings, load_settings
 from .db import add_suppression, init_db, load_suppressions
 from .importer import import_contacts
 from .mailer import SendAborted, run_email_campaign
+from .preview_html import write_preview_html
 from .render import build_env, render_email, render_form, verify_unsubscribe_token
 from .selector import select
 
@@ -90,9 +91,11 @@ def cmd_campaigns(args, settings: Settings) -> int:
         state = "有効" if campaign.enabled else "停止中"
         print(f"\n● {key}  [{state}]  {campaign.name}")
         print(f"  チャネル: {', '.join(campaign.channels)} / ステップ数: {len(campaign.steps)}")
+        titles = {s.key: (s.title or s.key) for s in campaign.steps}
         for row in report_mod.campaign_progress(conn, campaign):
             print(
-                f"    - {row['step']}: 送信済 {row['送信済']} / 失敗 {row['失敗']}"
+                f"    - {titles.get(row['step'], row['step'])}（{row['step']}）:"
+                f" 送信済 {row['送信済']} / 失敗 {row['失敗']}"
                 f" / 要確認 {row['要確認']} / dry-run {row['dry-run']}"
             )
     conn.close()
@@ -156,6 +159,15 @@ def cmd_preview(args, settings: Settings) -> int:
     if not rows:
         print("プレビュー対象の宛先がありません。`dm import` を先に実行してください。", file=sys.stderr)
         return 1
+
+    if args.html:
+        target = Path(args.html)
+        write_preview_html(target, settings, campaign, rows[0],
+                           channels=(channel,) if args.channel_only else ("email", "form"))
+        print(f"プレビューを書き出しました: {target}")
+        print("  ブラウザで開くか、共有ページとして提示してください。")
+        conn.close()
+        return 0
 
     env = build_env(settings)
     failures = 0
@@ -393,6 +405,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--channel", choices=["email", "form"], default="email")
     p.add_argument("--step")
     p.add_argument("--count", type=int, default=1)
+    p.add_argument("--html", help="全ステップをまとめたHTMLを書き出す（画面で確認・共有する用）")
+    p.add_argument("--channel-only", action="store_true",
+                   help="--html のとき、--channel で指定した片方だけを出力する")
     p.set_defaults(func=cmd_preview)
 
     p = sub.add_parser("plan", help="今回の実行で誰に何が送られるかを表示する（送信しない）")

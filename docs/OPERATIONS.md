@@ -25,6 +25,11 @@ python -m dm.cli preview --campaign intro_2026autumn --channel form  --count 2
 ```
 
 法令表示チェックが `OK` になることを確認します。
+全体を通しで読みたいときは、確認用ページを書き出してブラウザで開きます。
+
+```bash
+python -m dm.cli preview --campaign intro_2026autumn --html state/preview.html
+```
 
 ### ステップ3: .eml で最終確認
 
@@ -137,6 +142,8 @@ python -m dm.cli export --needs-review state/needs_review.csv
   を上げるときは `TimeoutStartSec` も合わせて見直してください。
 - **同一サイトへの1日1回制限（`max_per_domain_per_day`）は下げないでください。**
   ここを緩めると相手の業務妨害になり得ます。
+- 同一相手への最短接触間隔は3日（週2回まで）に設定しています。内容が違う場合を想定した値です。
+  同じ内容を週2回送ることは、この設定では防げません。**内容が違うことは運用側で担保してください。**
 
 4,568件のリストを、週150件のペースで一巡させると約30週です。急ぐ理由がなければ、
 この程度の速度が最も安全で、結果的に到達率も高くなります。

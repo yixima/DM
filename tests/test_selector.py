@@ -123,3 +123,49 @@ def test_form_channel_daily_cap_per_site(conn, settings, campaign):
     )
     report = select(conn, campaign, "form", settings, now=datetime.now(timezone.utc))
     assert report.plans == []
+
+
+def test_campaign_cannot_go_below_the_global_floor(conn, settings, campaign):
+    """キャンペーン側で短い間隔を書いても、全体の下限より詰まらない（安全弁）。"""
+    settings.global_min_interval_days = 3
+    campaign.limits.min_interval_days_between_touches = 1  # 下限より短い指定
+    campaign.steps[1].delay_days = 0                       # step側の待機は無効化
+
+    contact = add_contact(conn)
+    _mark_sent(conn, contact["id"], campaign.key, "s1", NOW - timedelta(days=2))
+
+    # 2日後は下限(3日)に満たないので送らない
+    assert select(conn, campaign, "email", settings, now=NOW).plans == []
+
+    # 3日を超えれば次のコンテンツへ進む
+    resumed = select(conn, campaign, "email", settings, now=NOW + timedelta(days=1, hours=1))
+    assert [p.step.key for p in resumed.plans] == ["s2"]
+
+
+def test_campaign_may_request_a_longer_interval(conn, settings, campaign):
+    """下限より長い間隔の指定は、そのまま尊重される。"""
+    settings.global_min_interval_days = 3
+    campaign.limits.min_interval_days_between_touches = 30
+    campaign.steps[1].delay_days = 0
+
+    contact = add_contact(conn)
+    _mark_sent(conn, contact["id"], campaign.key, "s1", NOW - timedelta(days=10))
+
+    assert select(conn, campaign, "email", settings, now=NOW).plans == []
+    later = select(conn, campaign, "email", settings, now=NOW + timedelta(days=21))
+    assert [p.step.key for p in later.plans] == ["s2"]
+
+
+def test_twice_a_week_cadence_is_possible_with_a_three_day_floor(conn, settings, campaign):
+    """内容の違う2通を、同一相手へ週2回（月・木）送れる。"""
+    settings.global_min_interval_days = 3
+    campaign.limits.min_interval_days_between_touches = None
+    campaign.steps[1].delay_days = 3
+
+    contact = add_contact(conn)
+    monday = NOW
+    _mark_sent(conn, contact["id"], campaign.key, "s1", monday)
+
+    # 木曜（3日後）には2通目が対象になる
+    thursday = select(conn, campaign, "email", settings, now=monday + timedelta(days=3, hours=1))
+    assert [p.step.key for p in thursday.plans] == ["s2"]

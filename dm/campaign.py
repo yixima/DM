@@ -21,6 +21,7 @@ class CampaignError(ValueError):
 @dataclass
 class Step:
     key: str
+    title: str = ""                     # 人が読むための名前（例: はじめのご挨拶）
     delay_days: int = 0                 # 直前の step からの最短待機日数
     subject: str = ""                   # メール件名（Jinja2 可）
     body_text: str = ""                 # テンプレートファイル名 (templates/ からの相対)
@@ -74,6 +75,7 @@ def _parse_step(raw: dict[str, Any], index: int) -> Step:
     key = str(raw.get("key") or f"step{index + 1}")
     return Step(
         key=key,
+        title=str(raw.get("title", "")) or key,
         delay_days=int(raw.get("delay_days", 0)),
         subject=str(raw.get("subject", "")),
         body_text=str(raw.get("body_text", "")),

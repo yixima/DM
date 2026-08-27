@@ -73,6 +73,10 @@ steps:
 - `s1_intro` を21日以上前に受け取った企業には `s2_cases` が届く
 - 全部受け取り終えた企業には、もう送らない（`repeat_cycle: true` なら1年後に再開）
 
+同一相手への最短接触間隔は **3日**（`settings.yaml` の `global_min_interval_days`）です。
+これは**下限**で、キャンペーン側でこれより短い値を書いても3日で頭打ちになります。
+内容の違うものであれば、同じ相手に週2回まで届けられます。
+
 という配信が、リストの端から順に自動で回り続けます。1回の実行で送る件数には上限があるので
 （既定150件）、4,568件のリストは数週間かけて消化されていきます。
 
@@ -121,6 +125,9 @@ python -m dm.cli plan --campaign intro_2026autumn --channel form
 
 # 実際の文面を目で確認する（法令表示チェック付き）
 python -m dm.cli preview --campaign intro_2026autumn --channel email --count 2
+
+# 全ステップをまとめた確認用ページを書き出す（ブラウザで読む・共有する）
+python -m dm.cli preview --campaign intro_2026autumn --html state/preview.html
 
 # メール配信（既定は dry-run。--live で実送信）
 python -m dm.cli send --campaign intro_2026autumn                 # dry-run
@@ -190,7 +197,7 @@ cron を使う場合は `deploy/crontab.example` を参照してください。
 | 条件 | 挙動 |
 |---|---|
 | 配信停止・バウンス・苦情のあった宛先 | 恒久的に除外 |
-| 同じ相手に14日以内に接触済み（メール・フォーム横断） | 今回は見送り |
+| 同じ相手に3日以内に接触済み（メール・フォーム横断） | 今回は見送り（＝同一相手へは週2回まで） |
 | 同一ドメインへ1回の実行で2件目 | 次回に繰り越し |
 | 同一サイトへ24時間以内に2回目のフォーム送信 | 見送り |
 | 21時〜翌8時（JST） | 実行を中止 |
@@ -226,6 +233,9 @@ templates/form/*.txt.j2            フォーム用（同じ3本）
 `{{ sender.phone }}` `{{ sender.email }}` `{{ sender.url }}` `{{ unsubscribe_url }}`
 
 書き換えたら必ず `dm preview` で法令表示チェックを通してください。
+`--html` を付けると全ステップをまとめた確認用ページになり、ブラウザでそのまま読めます。
+
+各ステップには `title:`（例: `はじめのご挨拶`）を付けられます。進捗表示とプレビューに使われます。
 
 新しいシリーズを始めるときは `config/campaigns/` に YAML を1本足すだけです。
 セグメント（`ranks`, `exclude_domains`, `exclude_freemail` など）で宛先を絞れます。

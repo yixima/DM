@@ -191,11 +191,11 @@ def select(
     last_touch = _last_touches(conn)
     form_today = _form_submits_today(conn, now) if channel == "form" else {}
 
-    min_interval = (
-        campaign.limits.min_interval_days_between_touches
-        if campaign.limits.min_interval_days_between_touches is not None
-        else settings.global_min_interval_days
-    )
+    # 全体の最短接触間隔は「下限」であり、キャンペーン側の設定で下回ることはできない。
+    # キャンペーンはこれより長い間隔を要求できるが、短くはできない（過剰接触の安全弁）。
+    min_interval = settings.global_min_interval_days
+    if campaign.limits.min_interval_days_between_touches is not None:
+        min_interval = max(min_interval, campaign.limits.min_interval_days_between_touches)
     per_domain_cap = (
         campaign.limits.max_per_domain_per_run
         if campaign.limits.max_per_domain_per_run is not None

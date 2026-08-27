@@ -12,7 +12,9 @@ sending:
   # console = 画面出力のみ / file = .eml を outbox に保存 / smtp = 実送信
   transport: console
   # 同一相手に対する最短接触間隔（メール・フォーム横断）。過剰接触の防止。
-  global_min_interval_days: 14
+  # これはシステム全体の下限であり、キャンペーン側の設定で下回ることはできない。
+  # 3 = 同一相手へは週2回まで（月・木のような配信が可能）。
+  global_min_interval_days: 3
   # この時間帯は送信しない（開始時, 終了時）。21時〜翌8時は停止。
   quiet_hours: [21, 8]
   timezone: Asia/Tokyo

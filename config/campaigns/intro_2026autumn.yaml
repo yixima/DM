@@ -20,10 +20,13 @@ segment:
 limits:
   max_per_run: 150           # 1回の実行で送る上限
   max_per_domain_per_run: 1
-  min_interval_days_between_touches: 14
+  # 同一相手への最短接触間隔。省略すると settings.yaml の下限（3日）に従う。
+  # ここに書けるのは「もっと長く空ける」場合のみ。3より小さい値を書いても3で頭打ちになる。
+  # min_interval_days_between_touches: 30
 
 steps:
   - key: s1_intro
+    title: はじめのご挨拶
     delay_days: 0
     subject: "【ご案内】{{ company_name }}のお問い合わせ・受注対応を効率化するご提案"
     body_text: email/intro_s1.txt.j2
@@ -31,6 +34,7 @@ steps:
     form_body: form/intro_s1.txt.j2
 
   - key: s2_cases
+    title: 導入事例のご紹介
     delay_days: 21
     subject: "【導入事例】少人数の体制で対応時間を月40時間削減した方法"
     body_text: email/intro_s2.txt.j2
@@ -38,6 +42,7 @@ steps:
     form_body: form/intro_s2.txt.j2
 
   - key: s3_seminar
+    title: オンライン説明会のご案内
     delay_days: 28
     subject: "【無料・オンライン】45分でわかる問い合わせ対応の自動化 説明会のご案内"
     body_text: email/intro_s3.txt.j2
