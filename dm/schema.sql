@@ -81,3 +81,11 @@ CREATE TABLE IF NOT EXISTS events (
     created_at   TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_events_type ON events(type, created_at);
+
+-- ドメインがメールを受け取れるかの判定結果。再実行を安くするための記録。
+CREATE TABLE IF NOT EXISTS domain_mx (
+    domain     TEXT PRIMARY KEY,
+    has_mx     INTEGER,          -- 1=受け取れる / 0=受け取れない / NULL=判定不能
+    detail     TEXT,
+    checked_at TEXT NOT NULL
+);

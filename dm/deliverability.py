@@ -70,8 +70,8 @@ class DnsUnavailable(RuntimeError):
     """DNS そのものに到達できない。設定の有無は判断できない。"""
 
 
-def _resolve_txt_system(name: str, timeout: float) -> list[str] | None:
-    """OS の DNS で TXT を引く。dnspython が無い／引けない場合は None。"""
+def _resolve_system(name: str, rtype: str, timeout: float) -> list[str] | None:
+    """OS の DNS で引く。dnspython が無い／引けない場合は None。"""
     try:
         import dns.resolver  # type: ignore
     except ImportError:
@@ -79,9 +79,11 @@ def _resolve_txt_system(name: str, timeout: float) -> list[str] | None:
     try:
         resolver = dns.resolver.Resolver()
         resolver.lifetime = timeout
-        answers = resolver.resolve(name, "TXT")
-    except Exception:
-        return None
+        answers = resolver.resolve(name, rtype)
+    except Exception as exc:
+        # 「レコードが無い」は答えが返ってきているので、空リストとして扱う
+        name_error = type(exc).__name__ in ("NXDOMAIN", "NoAnswer")
+        return [] if name_error else None
     records = []
     for answer in answers:
         # TXT は 255 バイトごとに分割されることがあるため連結する
@@ -93,9 +95,9 @@ def _resolve_txt_system(name: str, timeout: float) -> list[str] | None:
     return records
 
 
-def _resolve_txt_https(name: str, timeout: float) -> list[str] | None:
-    """UDP/53 が塞がれた環境向けに、HTTPS 経由（DoH）で TXT を引く。"""
-    url = f"{DOH_ENDPOINT}?{urllib.parse.urlencode({'name': name, 'type': 'TXT'})}"
+def _resolve_https(name: str, rtype: str, timeout: float) -> list[str] | None:
+    """UDP/53 が塞がれた環境向けに、HTTPS 経由（DoH）で引く。"""
+    url = f"{DOH_ENDPOINT}?{urllib.parse.urlencode({'name': name, 'type': rtype})}"
     request = urllib.request.Request(url, headers={"Accept": "application/dns-json"})
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
@@ -107,13 +109,39 @@ def _resolve_txt_https(name: str, timeout: float) -> list[str] | None:
     return [a.get("data", "").strip('"').replace('" "', "") for a in payload.get("Answer", [])]
 
 
-def resolve_txt(name: str, timeout: float = 8.0) -> list[str]:
-    """TXT レコードを引く。DNS に到達できないときは DnsUnavailable。"""
-    for resolver in (_resolve_txt_system, _resolve_txt_https):
-        records = resolver(name, timeout)
+def resolve(name: str, rtype: str = "TXT", timeout: float = 8.0) -> list[str]:
+    """DNS レコードを引く。到達できないときは DnsUnavailable。
+
+    「レコードが無い」（空リスト）と「引けない」（例外）を区別する。
+    """
+    for resolver in (_resolve_system, _resolve_https):
+        records = resolver(name, rtype, timeout)
         if records is not None:
             return records
-    raise DnsUnavailable(f"{name} の DNS 問い合わせに失敗しました")
+    raise DnsUnavailable(f"{name} の DNS 問い合わせに失敗しました（{rtype}）")
+
+
+def resolve_txt(name: str, timeout: float = 8.0) -> list[str]:
+    return resolve(name, "TXT", timeout)
+
+
+def has_mail_exchanger(domain: str, timeout: float = 8.0) -> bool | None:
+    """そのドメインがメールを受け取れるか。
+
+    True  = MX または A レコードがある（受け取れる可能性がある）
+    False = どちらも無い（送っても確実に届かない）
+    None  = DNS に到達できず判定不能（§3-15: 「無い」と断定しない）
+    """
+    try:
+        if resolve(domain, "MX", timeout):
+            return True
+    except DnsUnavailable:
+        return None
+    # MX が無くても A があれば、そのホストが受け取る決まりになっている
+    try:
+        return bool(resolve(domain, "A", timeout))
+    except DnsUnavailable:
+        return None
 
 
 def _domain_of(email: str) -> str:

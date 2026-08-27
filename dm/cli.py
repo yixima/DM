@@ -72,6 +72,33 @@ def cmd_import(args, settings: Settings) -> int:
     return 0
 
 
+def cmd_verify(args, settings: Settings) -> int:
+    from .verify import verify_email_domains
+
+    conn = _open(settings)
+    print("メール宛先のドメインを DNS で検証します（送る前にバウンスを減らすため）…")
+    result = verify_email_domains(
+        conn, limit=args.limit, recheck=args.recheck,
+        workers=args.workers, timeout=args.timeout, apply=not args.dry_run,
+    )
+    print(result.summary())
+    if result.disabled_examples:
+        print("  例:")
+        for line in result.disabled_examples:
+            print(f"    - {line}")
+    if result.undetermined:
+        print(f"\n  ※ 判定不能 {result.undetermined}件 は送信対象のまま残しています。")
+        print("    DNSに到達できなかっただけで、宛先が無いという意味ではありません。")
+        print("    ネットワークを確認してから再実行してください。")
+    if result.not_checked:
+        print(f"\n  未判定 {result.not_checked}件 が残っています（--limit のため）。")
+        print("    続けて同じコマンドを実行すると、続きから判定します。")
+    if args.dry_run:
+        print("\n  （--dry-run のため、宛先の状態は変更していません）")
+    conn.close()
+    return 0
+
+
 def cmd_stats(args, settings: Settings) -> int:
     conn = _open(settings)
     print("■ 宛先リスト")
@@ -446,6 +473,14 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("import", help="マスターCSVを取り込む")
     p.add_argument("--csv", help="取り込むCSV（既定: settings の contacts_csv）")
     p.set_defaults(func=cmd_import)
+
+    p = sub.add_parser("verify", help="送信前にドメインを実測し、届かない宛先を外す")
+    p.add_argument("--limit", type=int, help="今回判定するドメイン数の上限（分割実行用）")
+    p.add_argument("--recheck", action="store_true", help="判定済みのドメインも引き直す")
+    p.add_argument("--workers", type=int, default=8)
+    p.add_argument("--timeout", type=float, default=8.0)
+    p.add_argument("--dry-run", action="store_true", help="判定するが宛先の状態は変えない")
+    p.set_defaults(func=cmd_verify)
 
     p = sub.add_parser("stats", help="宛先リストと送信結果の集計")
     p.add_argument("--days", type=int, default=30)

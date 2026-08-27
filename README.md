@@ -119,6 +119,7 @@ python -m dm.cli init
 python -m dm.cli import
 python -m dm.cli doctor                      # 設定に不足がないか確認
 python -m dm.cli doctor --dns                # SPF/DKIM/DMARC が実際に引けるか確認
+python -m dm.cli verify                      # 宛先ドメインを実測し、届かないものを外す
 ```
 
 ### `.env` の必須項目
@@ -321,6 +322,31 @@ python -m dm.cli doctor --dns
 | 配信停止の自動取り込み | 返信本文から検出して送信禁止リストへ |
 | 同一ドメインへの集中回避 | 1回の実行で同一ドメインへ1通まで |
 | Message-ID の整合 | 送信元ドメインで生成 |
+
+### 送る前にリストを掃除する
+
+自動収集のリストには、すでに存在しないドメインが混ざります。そのまま送るとバウンスになり、
+バウンス率が上がると送信ドメインの評判が落ちて、**正常な宛先にも届かなくなります。**
+
+```bash
+python -m dm.cli verify              # 全ドメインを判定して、届かない宛先を外す
+python -m dm.cli verify --dry-run    # 判定するだけ（宛先の状態は変えない）
+python -m dm.cli verify --limit 500  # 分割して実行（続きから再開できる）
+```
+
+DNS を引いて MX（または A）レコードの有無を確認します。判定結果は記録されるので、
+再実行しても引き直しません。**「DNSに到達できなかった」ドメインは「宛先が無い」とは扱わず、
+送信対象に残します。**
+
+### 配信サービス（ESP）は使えるか
+
+Mailchimp・Benchmark Email などの配信サービスは、**ウェブサイトから収集したアドレスを含む
+リストの使用を規約で禁じています。**違反すると即時アカウント停止・返金なしとなります。
+（[Benchmark Email の規約](https://kb.benchmarkemail.com/en/benchmark-email-contact-list-permission-policy/)）
+
+日本の特定電子メール法では、公開されている法人の問い合わせ先への送信は
+オプトイン規制の例外に該当し得ますが、**法律上許されることと、配信サービスの利用規約で
+許されることは別です。** このリストは自社のSMTPから送る前提で設計しています。
 
 ### それでも運用側で必要なこと
 

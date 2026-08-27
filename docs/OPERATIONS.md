@@ -31,6 +31,19 @@ python -m dm.cli preview --campaign intro_2026autumn --channel form  --count 2
 python -m dm.cli preview --campaign intro_2026autumn --html state/preview.html
 ```
 
+### ステップ2.5: 宛先ドメインを掃除する
+
+```bash
+python -m dm.cli verify
+```
+
+DNS を引いて、メールを受け取れないドメインを送信対象から外します。
+2,518ドメインの判定に数分かかります。分割したい場合は `--limit 500` を付けて、
+同じコマンドを繰り返してください（続きから再開します）。
+
+**これを飛ばすとバウンス率が上がり、送信ドメインの評判を落とします。**
+リストを更新したら、そのつど実行してください。
+
 ### ステップ3: .eml で最終確認
 
 ```bash
