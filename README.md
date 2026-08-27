@@ -337,6 +337,7 @@ python -m dm.cli doctor --dns
 - `state/` と `.env` は `.gitignore` 済みです（送信履歴・秘密情報をコミットしないため）。
 - 法令面の要点は [`docs/COMPLIANCE.md`](docs/COMPLIANCE.md)、日々の運用は
   [`docs/OPERATIONS.md`](docs/OPERATIONS.md) にまとめています。**運用開始前に両方読んでください。**
+- 本案件の確定事項・未決事項は [`docs/PROJECT_NOTES.md`](docs/PROJECT_NOTES.md) に集約しています。
 
 ## テスト
 
