@@ -158,15 +158,34 @@ def test_quiet_hours_window_wraps_midnight():
     assert in_quiet_hours((0, 0), now=datetime(2026, 9, 1, 3, 0, tzinfo=tokyo)) is False
 
 
+def _shrink_list(tmp_path) -> None:
+    """CSVを1件だけに縮める（別セッションの書き出し失敗を模す）。"""
+    lines = CSV.strip().split("\n")
+    (tmp_path / "data" / "contacts.csv").write_text("\n".join(lines[:2]) + "\n", encoding="utf-8")
+
+
+def test_sudden_shrink_is_refused(project, tmp_path, capsys):
+    """宛先が急に減るCSVは、書き込む前に止める。"""
+    run(project, "import")
+    capsys.readouterr()
+    _shrink_list(tmp_path)
+
+    assert run(project, "import") == 2
+    err = capsys.readouterr().err
+    assert "取り込みを中止しました" in err
+    assert "宛先は1件も変更していません" in err
+
+    # 宛先はそのまま残っている
+    assert run(project, "plan", "--campaign", "cli_test", "--channel", "email") == 0
+    assert "対象 2件" in capsys.readouterr().out
+
+
 def test_missing_contacts_are_reported_but_not_deleted(project, tmp_path, capsys):
     run(project, "import")
     capsys.readouterr()
+    _shrink_list(tmp_path)
 
-    shorter = tmp_path / "data" / "contacts.csv"
-    lines = CSV.strip().split("\n")
-    shorter.write_text("\n".join(lines[:2]) + "\n", encoding="utf-8")   # 1件だけ残す
-
-    assert run(project, "import") == 0
+    assert run(project, "import", "--force") == 0
     out = capsys.readouterr().out
     assert "今回のCSVに無かった宛先: 2件" in out
     assert "削除はしていません" in out
@@ -174,13 +193,24 @@ def test_missing_contacts_are_reported_but_not_deleted(project, tmp_path, capsys
 
 def test_deactivate_missing_pauses_them(project, tmp_path, capsys):
     run(project, "import")
-    shorter = tmp_path / "data" / "contacts.csv"
-    lines = CSV.strip().split("\n")
-    shorter.write_text("\n".join(lines[:2]) + "\n", encoding="utf-8")
+    _shrink_list(tmp_path)
     capsys.readouterr()
 
-    assert run(project, "import", "--deactivate-missing") == 0
+    assert run(project, "import", "--force", "--deactivate-missing") == 0
     assert "送信対象から外しました" in capsys.readouterr().out
 
     assert run(project, "plan", "--campaign", "cli_test", "--channel", "email") == 0
     assert "対象 1件" in capsys.readouterr().out
+
+
+def test_import_from_a_watched_folder(project, tmp_path, capsys):
+    """別セッションの書き出し先フォルダから、最新のCSVを拾う。"""
+    folder = tmp_path / "shared"
+    folder.mkdir()
+    (folder / "master_contacts_20260901_120000.csv").write_text(CSV, encoding="utf-8")
+    capsys.readouterr()
+
+    assert run(project, "import", "--from-dir", str(folder)) == 0
+    out = capsys.readouterr().out
+    assert "master_contacts_20260901_120000.csv" in out
+    assert "登録された宛先     : 3" in out

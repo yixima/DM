@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 # 定期実行の入口。cron / systemd timer から呼ぶ。
 #
+#   scripts/periodic_run.sh refresh          リストの取り込み＋ドメイン検証
 #   scripts/periodic_run.sh email            メール配信（dry-run）
 #   scripts/periodic_run.sh email --live     メール配信（実送信）
 #   scripts/periodic_run.sh form  --live     フォーム送信（実送信）
 #   scripts/periodic_run.sh ingest           バウンス・配信停止の取り込み
+#
+# refresh は配信より先に回すこと。順序を逆にすると、古いリストで送ることになる。
 #
 # 環境変数:
 #   DM_CAMPAIGN  対象キャンペーン（既定: intro_2026autumn）
@@ -40,6 +43,15 @@ fi
 {
   echo "===== $(date '+%F %T') ${CHANNEL} / ${CAMPAIGN} ====="
   case "$CHANNEL" in
+    refresh)
+      # 監視フォルダの最新CSVを取り込む。宛先が大きく減っていれば取り込まずに止まる。
+      if ! "$PYTHON" -m dm.cli import --deactivate-missing "$@"; then
+        echo "!! リストの取り込みに失敗しました。配信は行いません。" >&2
+        exit 1
+      fi
+      # 新しく増えたドメインだけ判定される（判定済みは引き直さない）
+      "$PYTHON" -m dm.cli verify
+      ;;
     email)  "$PYTHON" -m dm.cli send   --campaign "$CAMPAIGN" "${LIMIT_ARG[@]}" "$@" ;;
     form)   "$PYTHON" -m dm.cli form   --campaign "$CAMPAIGN" "${LIMIT_ARG[@]}" "$@" ;;
     both)   "$PYTHON" -m dm.cli run    --campaign "$CAMPAIGN" "${LIMIT_ARG[@]}" "$@" ;;

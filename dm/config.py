@@ -153,6 +153,11 @@ class FormLimits:
 @dataclass
 class Settings:
     contacts_csv: Path = ROOT / "data" / "master_contacts_20260825_181226.csv"
+    # 別セッション（Cowork 等）が書き出すフォルダ。設定するとその中の最新CSVを自動で使う。
+    contacts_dir: Path | None = None
+    contacts_glob: str = "master_contacts_*.csv"
+    # 取り込みで使える宛先がこの割合を超えて減ったら中止する（書き出し失敗の検知）
+    max_shrink_percent: float = 20.0
     db_path: Path = ROOT / "state" / "dm.sqlite3"
     outbox_dir: Path = ROOT / "state" / "outbox"
     evidence_dir: Path = ROOT / "state" / "evidence"
@@ -205,6 +210,9 @@ def load_settings(settings_path: Path | None = None) -> Settings:
 
     settings = Settings(
         contacts_csv=_path(paths.get("contacts_csv"), Settings.contacts_csv),
+        contacts_dir=(_path(paths.get("contacts_dir"), ROOT) if paths.get("contacts_dir") else None),
+        contacts_glob=str(paths.get("contacts_glob") or Settings.contacts_glob),
+        max_shrink_percent=float(quality.get("max_shrink_percent", 20.0)),
         db_path=_path(paths.get("db"), Settings.db_path),
         outbox_dir=_path(paths.get("outbox"), Settings.outbox_dir),
         evidence_dir=_path(paths.get("evidence"), Settings.evidence_dir),

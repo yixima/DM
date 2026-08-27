@@ -20,7 +20,7 @@ from .campaign import CampaignError, get_campaign, load_campaigns
 from .compliance import check_email_body, check_form_body, check_settings
 from .config import Settings, load_settings
 from .db import add_suppression, init_db, load_suppressions, sent_today
-from .importer import import_contacts
+from .importer import ImportRefused, find_latest_csv, import_contacts
 from .mailer import SendAborted, run_email_campaign, run_email_campaigns
 from .preview_html import write_preview_html
 from .render import build_env, render_email, render_form, verify_unsubscribe_token
@@ -55,13 +55,43 @@ def cmd_init(args, settings: Settings) -> int:
     return 0
 
 
+def _resolve_csv(args, settings: Settings) -> Path:
+    """取り込むCSVを決める。--csv > 監視フォルダの最新 > 単一ファイル の順。"""
+    if args.csv:
+        return Path(args.csv)
+    directory = Path(args.from_dir) if args.from_dir else settings.contacts_dir
+    if directory:
+        return find_latest_csv(directory, settings.contacts_glob)
+    return settings.contacts_csv
+
+
 def cmd_import(args, settings: Settings) -> int:
-    csv_path = Path(args.csv) if args.csv else settings.contacts_csv
+    conn = _open(settings)
+    try:
+        csv_path = _resolve_csv(args, settings)
+    except ImportRefused as exc:
+        print(f"取り込めません: {exc}", file=sys.stderr)
+        conn.close()
+        return 1
     if not csv_path.exists():
         print(f"CSVが見つかりません: {csv_path}", file=sys.stderr)
+        conn.close()
         return 1
-    conn = _open(settings)
-    summary = import_contacts(conn, csv_path)
+
+    try:
+        summary = import_contacts(
+            conn, csv_path,
+            max_shrink_percent=settings.max_shrink_percent,
+            force=args.force,
+        )
+    except ImportRefused as exc:
+        print(f"取り込みを中止しました: {exc}", file=sys.stderr)
+        print("  宛先は1件も変更していません。", file=sys.stderr)
+        print("  書き出し元を確認してください。意図した縮小なら --force を付けて再実行します。",
+              file=sys.stderr)
+        conn.close()
+        return 2
+
     print(f"取り込み元: {csv_path}")
     print(f"  CSV行数           : {summary['csv_rows']}")
     print(f"  登録された宛先     : {summary['contacts']}")
@@ -493,9 +523,12 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("init", help="データベースを作成する").set_defaults(func=cmd_init)
 
     p = sub.add_parser("import", help="マスターCSVを取り込む")
-    p.add_argument("--csv", help="取り込むCSV（既定: settings の contacts_csv）")
+    p.add_argument("--csv", help="取り込むCSVを直接指定する")
+    p.add_argument("--from-dir", help="このフォルダ内の最新CSVを取り込む（別セッションの書き出し先）")
     p.add_argument("--deactivate-missing", action="store_true",
                    help="今回のCSVに無かった宛先を送信対象から外す（削除はしない）")
+    p.add_argument("--force", action="store_true",
+                   help="宛先が大きく減っていても取り込む（安全弁の解除）")
     p.set_defaults(func=cmd_import)
 
     p = sub.add_parser("verify", help="送信前にドメインを実測し、届かない宛先を外す")

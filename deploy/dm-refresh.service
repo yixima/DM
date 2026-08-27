@@ -1,0 +1,13 @@
+[Unit]
+Description=DM リストの取り込みとドメイン検証
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/dm
+ExecStart=/opt/dm/scripts/periodic_run.sh refresh
+User=dm
+Group=dm
+EnvironmentFile=-/opt/dm/.env
+TimeoutStartSec=3600

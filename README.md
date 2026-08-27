@@ -356,7 +356,53 @@ Mailchimp・Benchmark Email などの配信サービスは、**ウェブサイ�
 
 ---
 
-## 10. 注意点
+## 10. 別のところで更新されるリストを自動で取り込む
+
+リストが別の場所（別セッション・別担当者）で更新され続ける場合、そのフォルダを
+監視して**いちばん新しいCSVを自動で取り込めます**。
+
+```yaml
+# config/settings.yaml
+paths:
+  contacts_dir: /Users/<ユーザー名>/Shared/dm-lists   # 書き出し先フォルダ
+  contacts_glob: "master_contacts_*.csv"             # 対象のファイル名
+```
+
+```bash
+python -m dm.cli import                    # フォルダ内の最新CSVを取り込む
+python -m dm.cli import --from-dir <path>  # フォルダを直接指定する
+```
+
+定期実行では、配信の前に `refresh`（取り込み＋ドメイン検証）を回します。
+
+```bash
+scripts/periodic_run.sh refresh    # 毎日 7:00
+scripts/periodic_run.sh ingest     # 毎日 8:00
+scripts/periodic_run.sh email --live   # 配信
+```
+
+**順序が重要です。** `refresh` を配信より後に回すと、古いリストで送ることになります。
+
+### 壊れたCSVを取り込まないための安全弁
+
+書き出しが途中で失敗した小さなCSVを黙って取り込むと、**リストが大量に消えたまま
+配信が続きます。** そこで、宛先が前回より大きく減る取り込みは**書き込む前に中止**します。
+
+```
+取り込みを中止しました: メール送信可の宛先が 2516 → 22 と 99.1% 減っています（許容 20%）。
+  宛先は1件も変更していません。
+```
+
+- 許容幅は `quality.max_shrink_percent`（既定20%）で調整します
+- 意図した縮小であれば `--force` を付けて再実行します
+- 増える分には制限しません
+- `refresh` はこの中止を検知すると**配信を行わずに終了**します（古い状態で送らないため）
+
+取り込み履歴は `imports` テーブルに残り、どのファイルをいつ取り込んだか追えます。
+
+---
+
+## 11. 注意点
 
 - **`data/*.csv` には取引先候補の連絡先が入っています。** このリポジトリを公開する場合は、
   CSV と `state/` をリポジトリ外へ移し、`paths.contacts_csv` で参照してください。

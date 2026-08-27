@@ -89,3 +89,19 @@ CREATE TABLE IF NOT EXISTS domain_mx (
     detail     TEXT,
     checked_at TEXT NOT NULL
 );
+
+-- 取り込み履歴。どのファイルを・いつ・どれだけ取り込んだか。
+CREATE TABLE IF NOT EXISTS imports (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_path   TEXT NOT NULL,
+    source_mtime  TEXT,
+    csv_rows      INTEGER NOT NULL,
+    contacts      INTEGER NOT NULL,
+    email_targets INTEGER NOT NULL,
+    form_targets  INTEGER NOT NULL,
+    inserted      INTEGER NOT NULL DEFAULT 0,
+    updated       INTEGER NOT NULL DEFAULT 0,
+    missing       INTEGER NOT NULL DEFAULT 0,
+    created_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_imports_created ON imports(created_at);

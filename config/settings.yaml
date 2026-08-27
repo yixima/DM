@@ -61,3 +61,9 @@ form_profile:
   prefecture: ""      # 例: 東京都
   address: ""
   url: ""
+
+# 別セッション（Cowork 等）がCSVを書き出すフォルダを監視する場合はここに書く。
+# 設定すると `dm import` は、このフォルダ内で contacts_glob に一致する
+# 最も新しいファイルを自動で選ぶ。単一ファイルを使うなら contacts_csv のままでよい。
+#   例: contacts_dir: /Users/<ユーザー名>/Shared/dm-lists
+#       contacts_glob: "master_contacts_*.csv"

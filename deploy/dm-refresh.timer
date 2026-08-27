@@ -1,0 +1,10 @@
+[Unit]
+Description=DM リストの取り込みとドメイン検証（毎日 7:00 JST）
+
+[Timer]
+# 配信（10:00 / 11:00）より前に回すこと。逆順だと古いリストで送ることになる。
+OnCalendar=*-*-* 07:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

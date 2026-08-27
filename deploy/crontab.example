@@ -2,6 +2,9 @@
 # TZ を明示しないと UTC で動く環境があるので必ず書く。
 TZ=Asia/Tokyo
 
+# 毎日 7:00  リストの取り込み＋ドメイン検証（配信より前に回すこと）
+0 7 * * *    /opt/dm/scripts/periodic_run.sh refresh
+
 # 毎日 8:00  バウンス・配信停止の取り込み
 #   これを止めると、配信停止の申し出を見落として送り続けることになる。最優先で回す。
 0 8 * * *    /opt/dm/scripts/periodic_run.sh ingest
