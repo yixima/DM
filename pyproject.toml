@@ -11,6 +11,8 @@ dependencies = [
 
 [project.optional-dependencies]
 form = ["playwright>=1.44"]
+# 到達性チェック用。無くても HTTPS 経由（DoH）で問い合わせるため動作する。
+dns = ["dnspython>=2.6"]
 dev = ["pytest>=8.0"]
 
 [project.scripts]

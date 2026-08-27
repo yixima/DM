@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .campaign import Campaign
+from .db import sent_today
 from .formrunner import REVIEW_STATUSES
 from .selector import SUCCESS_STATUSES
 
@@ -137,6 +138,6 @@ def format_stats(stats: dict[str, Any]) -> str:
 
 
 __all__ = [
-    "contact_stats", "campaign_progress", "recent_runs", "channel_totals",
+    "contact_stats", "campaign_progress", "recent_runs", "channel_totals", "sent_today",
     "export_needs_review", "export_deliveries", "format_stats", "SUCCESS_STATUSES",
 ]

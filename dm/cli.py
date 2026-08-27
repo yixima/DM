@@ -18,7 +18,7 @@ from . import report as report_mod
 from .campaign import CampaignError, get_campaign, load_campaigns
 from .compliance import check_email_body, check_form_body, check_settings
 from .config import Settings, load_settings
-from .db import add_suppression, init_db, load_suppressions
+from .db import add_suppression, init_db, load_suppressions, sent_today
 from .importer import import_contacts
 from .mailer import SendAborted, run_email_campaign, run_email_campaigns
 from .preview_html import write_preview_html
@@ -140,7 +140,26 @@ def cmd_doctor(args, settings: Settings) -> int:
     print(f"  最短接触間隔         : {settings.global_min_interval_days}日")
     print(f"  メール1回あたり上限  : {settings.email_limits.max_per_run}件")
     print(f"  フォーム1回あたり上限: {settings.form_limits.max_per_run}件")
+    print(f"  1日あたりの上限      : {settings.email_limits.max_per_day}件")
     print(f"  robots.txt 尊重      : {'はい' if settings.form_limits.respect_robots else 'いいえ'}")
+
+    if args.dns:
+        from .deliverability import run_checks
+
+        selectors = tuple(args.dkim_selector) if args.dkim_selector else None
+        print("\n■ 到達性チェック（実際にDNSを引いています）")
+        deliverability = run_checks(
+            settings, sent_today=sent_today(conn, settings.timezone), dkim_selectors=selectors
+        )
+        print(deliverability.render())
+        if deliverability.unknowns:
+            print("\n  ※「確認不可」は、DNSに到達できなかったという意味です。")
+            print("    設定されていないという意味ではありません。ネットワークを確認してください。")
+        if deliverability.failures:
+            print("\n  認証設定が欠けたまま送ると、大半が迷惑メール扱いになります。")
+            print("    送信前に必ず解消してください。")
+            problems.append("[dns] 到達性チェックに不合格の項目があります")
+
     conn.close()
     return 1 if problems else 0
 
@@ -433,7 +452,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_stats)
 
     sub.add_parser("campaigns", help="キャンペーン一覧と進捗").set_defaults(func=cmd_campaigns)
-    sub.add_parser("doctor", help="送信前の設定チェック").set_defaults(func=cmd_doctor)
+    p = sub.add_parser("doctor", help="送信前の設定チェック")
+    p.add_argument("--dns", action="store_true",
+                   help="SPF / DKIM / DMARC / 逆引きを実際にDNSへ問い合わせて検査する")
+    p.add_argument("--dkim-selector", action="append",
+                   help="DKIMのセレクタを指定（省略時はよく使われるものを順に試す）")
+    p.set_defaults(func=cmd_doctor)
 
     p = sub.add_parser("preview", help="実際に送られる文面を確認する")
     p.add_argument("--campaign", required=True)

@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from .campaign import Campaign
 from .compliance import check_email_body, check_settings
 from .config import Settings
-from .db import finish_run, record_delivery, start_run
+from .db import finish_run, record_delivery, sent_today, start_run
 from .render import build_env, render_email, unsubscribe_mailto, unsubscribe_url
 from .selector import Plan, SelectionReport, select, select_across
 from .throttle import Pacer, in_quiet_hours
@@ -54,6 +54,22 @@ class SendResult:
                 f"{k}={v}" for k, v in sorted(self.skip_reasons.items(), key=lambda kv: -kv[1])
             )
         return head
+
+
+def _daily_budget(conn: sqlite3.Connection, settings: Settings, limit: int | None, dry_run: bool) -> tuple[int | None, int]:
+    """(今回使ってよい件数, 本日すでに送った件数)。
+
+    1日あたりの上限を超えないよう、実行のたびに残枠を計算して上限に反映する。
+    dry-run は実送信ではないので残枠を消費しない。
+    """
+    today = sent_today(conn, settings.timezone)
+    cap = settings.email_limits.max_per_day
+    if dry_run or not cap:
+        return limit, today
+    remaining = max(0, cap - today)
+    if limit is None:
+        return remaining, today
+    return min(limit, remaining), today
 
 
 def _preflight(settings: Settings, dry_run: bool, ignore_quiet_hours: bool) -> None:
@@ -125,6 +141,13 @@ def _execute(
     return total
 
 
+def _daily_cap_reached(settings: Settings, today: int, dry_run: bool) -> SendResult:
+    cap = settings.email_limits.max_per_day
+    result = SendResult(run_id=None, mode="dry-run" if dry_run else "live")
+    result.skip_reasons[f"本日の上限に到達（{today}/{cap}通）"] = 1
+    return result
+
+
 def run_email_campaign(
     conn: sqlite3.Connection,
     campaign: Campaign,
@@ -142,7 +165,11 @@ def run_email_campaign(
     _preflight(settings, dry_run, ignore_quiet_hours)
 
     now = now or datetime.now(timezone.utc)
-    report = select(conn, campaign, "email", settings, limit=limit, now=now)
+    budget, today = _daily_budget(conn, settings, limit, dry_run)
+    if budget == 0:
+        return _daily_cap_reached(settings, today, dry_run)
+
+    report = select(conn, campaign, "email", settings, limit=budget, now=now)
     result = _execute(conn, [(campaign, report)], settings,
                       dry_run=dry_run, transport_override=transport_override)
     result.per_campaign.setdefault(campaign.key, len(report.plans))
@@ -163,7 +190,11 @@ def run_email_campaigns(
     """有効なシリーズをまとめて配信する。優先度の高い順に宛先を確保する。"""
     _preflight(settings, dry_run, ignore_quiet_hours)
     now = now or datetime.now(timezone.utc)
-    planned = select_across(conn, campaigns, "email", settings, limit=limit, now=now)
+    budget, today = _daily_budget(conn, settings, limit, dry_run)
+    if budget == 0:
+        return _daily_cap_reached(settings, today, dry_run)
+
+    planned = select_across(conn, campaigns, "email", settings, limit=budget, now=now)
     return _execute(conn, planned, settings, dry_run=dry_run, transport_override=transport_override)
 
 

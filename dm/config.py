@@ -132,6 +132,7 @@ class Imap:
 @dataclass
 class EmailLimits:
     max_per_run: int = 200
+    max_per_day: int = 1000
     max_per_hour: int = 120
     min_seconds_between_sends: float = 2.0
     jitter_seconds: float = 1.5
@@ -260,6 +261,7 @@ def load_settings(settings_path: Path | None = None) -> Settings:
         ),
         email_limits=EmailLimits(
             max_per_run=int(limits.get("max_per_run", 200)),
+            max_per_day=int(limits.get("max_per_day", 1000)),
             max_per_hour=int(limits.get("max_per_hour", 120)),
             min_seconds_between_sends=float(limits.get("min_seconds_between_sends", 2.0)),
             jitter_seconds=float(limits.get("jitter_seconds", 1.5)),

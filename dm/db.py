@@ -28,6 +28,19 @@ def init_db(db_path: Path) -> sqlite3.Connection:
     return conn
 
 
+def sent_today(conn: sqlite3.Connection, tz_name: str = "Asia/Tokyo") -> int:
+    """設定タイムゾーンの「今日」に実際に送ったメール数。1日あたりの上限判定に使う。"""
+    from zoneinfo import ZoneInfo
+
+    midnight = datetime.now(ZoneInfo(tz_name)).replace(hour=0, minute=0, second=0, microsecond=0)
+    since = midnight.astimezone(timezone.utc).isoformat(timespec="seconds")
+    row = conn.execute(
+        "SELECT COUNT(*) n FROM deliveries WHERE channel='email' AND status='sent' AND created_at>=?",
+        (since,),
+    ).fetchone()
+    return int(row["n"] or 0)
+
+
 def start_run(conn: sqlite3.Connection, campaign_key: str, channel: str, mode: str) -> int:
     cur = conn.execute(
         "INSERT INTO runs (campaign_key, channel, mode, started_at) VALUES (?,?,?,?)",

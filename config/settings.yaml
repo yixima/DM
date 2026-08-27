@@ -27,6 +27,10 @@ quality:
 
 email_limits:
   max_per_run: 200          # 1回の実行で送る上限
+  # 1日あたりの上限。Gmail は1日5,000通を超える送信者に SPF/DKIM/DMARC を必須とし、
+  # 迷惑メール報告率0.30%未満を求める。認証が万全でも 5,000 は超えない方が安全。
+  # https://support.google.com/a/answer/81126
+  max_per_day: 1000
   max_per_hour: 120         # 1時間あたりの上限（レピュテーション保護）
   min_seconds_between_sends: 2.0
   jitter_seconds: 1.5
