@@ -69,6 +69,45 @@ def email_domains(conn: sqlite3.Connection) -> list[str]:
     return sorted({(r["d"] or "").lower() for r in rows if r["d"]})
 
 
+def apply_cached_verdicts(conn: sqlite3.Connection) -> int:
+    """記録済みの判定結果を宛先へ反映する。DNS は引かない。
+
+    `dm import` の直後に呼ぶ。これが無いと、リストを再取り込みするたびに
+    検証で外したはずの宛先が復活してしまう。
+    """
+    dead = [
+        r["domain"] for r in
+        conn.execute("SELECT domain FROM domain_mx WHERE has_mx=0").fetchall()
+    ]
+    return _disable_contacts(conn, dead)[0]
+
+
+def _disable_contacts(conn: sqlite3.Connection, domains: list[str]) -> tuple[int, list[str]]:
+    """指定ドメインの宛先をメール送信対象から外す。(件数, 例)。"""
+    disabled = 0
+    examples: list[str] = []
+    for domain in domains:
+        rows = conn.execute(
+            """SELECT id, company_name, contact_email, quality_notes FROM contacts
+               WHERE email_ok=1 AND lower(contact_email) LIKE ?""",
+            (f"%@{domain}",),
+        ).fetchall()
+        for row in rows:
+            notes = [n for n in (row["quality_notes"] or "").split("; ") if n]
+            note = "email:メールを受け取れないドメイン"
+            if note not in notes:
+                notes.append(note)
+            conn.execute(
+                "UPDATE contacts SET email_ok=0, quality_notes=?, updated_at=? WHERE id=?",
+                ("; ".join(notes), utcnow(), row["id"]),
+            )
+            disabled += 1
+            if len(examples) < 10:
+                examples.append(f"{row['company_name']} <{row['contact_email']}>")
+    conn.commit()
+    return disabled, examples
+
+
 def verify_email_domains(
     conn: sqlite3.Connection,
     *,
@@ -114,23 +153,5 @@ def verify_email_domains(
         return result
 
     dead = [d for d, verdict in cache.items() if verdict is False]
-    for domain in dead:
-        rows = conn.execute(
-            """SELECT id, company_name, contact_email, quality_notes FROM contacts
-               WHERE email_ok=1 AND lower(contact_email) LIKE ?""",
-            (f"%@{domain}",),
-        ).fetchall()
-        for row in rows:
-            notes = (row["quality_notes"] or "").split("; ")
-            note = "email:メールを受け取れないドメイン"
-            if note not in notes:
-                notes.append(note)
-            conn.execute(
-                "UPDATE contacts SET email_ok=0, quality_notes=?, updated_at=? WHERE id=?",
-                ("; ".join(n for n in notes if n), utcnow(), row["id"]),
-            )
-            result.contacts_disabled += 1
-            if len(result.disabled_examples) < 10:
-                result.disabled_examples.append(f"{row['company_name']} <{row['contact_email']}>")
-    conn.commit()
+    result.contacts_disabled, result.disabled_examples = _disable_contacts(conn, dead)
     return result

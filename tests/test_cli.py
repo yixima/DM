@@ -156,3 +156,31 @@ def test_quiet_hours_window_wraps_midnight():
     assert in_quiet_hours((21, 8), now=datetime(2026, 9, 1, 10, 0, tzinfo=tokyo)) is False
     assert in_quiet_hours((21, 8), now=datetime(2026, 9, 1, 20, 59, tzinfo=tokyo)) is False
     assert in_quiet_hours((0, 0), now=datetime(2026, 9, 1, 3, 0, tzinfo=tokyo)) is False
+
+
+def test_missing_contacts_are_reported_but_not_deleted(project, tmp_path, capsys):
+    run(project, "import")
+    capsys.readouterr()
+
+    shorter = tmp_path / "data" / "contacts.csv"
+    lines = CSV.strip().split("\n")
+    shorter.write_text("\n".join(lines[:2]) + "\n", encoding="utf-8")   # 1件だけ残す
+
+    assert run(project, "import") == 0
+    out = capsys.readouterr().out
+    assert "今回のCSVに無かった宛先: 2件" in out
+    assert "削除はしていません" in out
+
+
+def test_deactivate_missing_pauses_them(project, tmp_path, capsys):
+    run(project, "import")
+    shorter = tmp_path / "data" / "contacts.csv"
+    lines = CSV.strip().split("\n")
+    shorter.write_text("\n".join(lines[:2]) + "\n", encoding="utf-8")
+    capsys.readouterr()
+
+    assert run(project, "import", "--deactivate-missing") == 0
+    assert "送信対象から外しました" in capsys.readouterr().out
+
+    assert run(project, "plan", "--campaign", "cli_test", "--channel", "email") == 0
+    assert "対象 1件" in capsys.readouterr().out

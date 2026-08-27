@@ -73,3 +73,17 @@ def test_normalize_row_drops_unusable_values():
     assert row["email_ok"] == 0
     assert row["form_ok"] == 1             # フォームは使える
     assert row["flag_domain_mismatch"] == 1
+
+
+def test_scraped_file_names_are_rejected():
+    """収集スクリプトが画像・スクリプト名を拾ったもの。DNSを引く前に落とす。"""
+    for bogus in ("main_slide01_sp@3x.avif", "polyfill@main.js", "ecom-swiper@11.css",
+                  "portal_m@d.css", "hero@banner.webp"):
+        ok, reasons = check_email(bogus)
+        assert ok is False, bogus
+        assert "ファイル名の誤検出" in reasons[0]
+
+
+def test_real_addresses_still_pass_the_extension_guard():
+    for good in ("info@artec-kk.co.jp", "a@b.museum", "x@example.tokyo"):
+        assert check_email(good)[0] is True, good

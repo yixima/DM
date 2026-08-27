@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import os
 import sqlite3
 import sys
 from pathlib import Path
@@ -68,6 +69,27 @@ def cmd_import(args, settings: Settings) -> int:
     print(f"  フォーム送信可     : {summary['form_targets']}")
     for key, value in summary["stats"].items():
         print(f"  {key}: {value}")
+
+    from .verify import apply_cached_verdicts
+
+    restored = apply_cached_verdicts(conn)
+    if restored:
+        print(f"  検証済みの到達不可ドメインを再適用: {restored}件")
+
+    missing = [m for m in summary["missing"] if m["status"] == "active"]
+    if missing:
+        print(f"\n  今回のCSVに無かった宛先: {len(missing)}件（削除はしていません）")
+        for row in missing[:5]:
+            print(f"    - {row['company_name']} <{row['contact_email'] or '（メールなし）'}>")
+        if len(missing) > 5:
+            print(f"    ... 他 {len(missing) - 5} 件")
+        if args.deactivate_missing:
+            from .importer import deactivate
+
+            count = deactivate(conn, [m["id"] for m in missing])
+            print(f"  → {count}件を送信対象から外しました（status=paused。履歴は残ります）")
+        else:
+            print("    送信対象から外すには --deactivate-missing を付けて再実行してください。")
     conn.close()
     return 0
 
@@ -472,6 +494,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("import", help="マスターCSVを取り込む")
     p.add_argument("--csv", help="取り込むCSV（既定: settings の contacts_csv）")
+    p.add_argument("--deactivate-missing", action="store_true",
+                   help="今回のCSVに無かった宛先を送信対象から外す（削除はしない）")
     p.set_defaults(func=cmd_import)
 
     p = sub.add_parser("verify", help="送信前にドメインを実測し、届かない宛先を外す")
@@ -582,6 +606,14 @@ def main(argv: list[str] | None = None) -> int:
     except CampaignError as exc:
         print(f"キャンペーン定義のエラー: {exc}", file=sys.stderr)
         return 1
+    except BrokenPipeError:
+        # `dm stats | head` のように読み手が先に閉じた場合。異常ではない。
+        try:
+            sys.stdout.close()
+        except BrokenPipeError:
+            pass
+        os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        return 0
     except KeyboardInterrupt:
         print("\n中断しました", file=sys.stderr)
         return 130

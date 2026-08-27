@@ -18,6 +18,16 @@ PLACEHOLDER_DOMAINS = {
 }
 PLACEHOLDER_LOCALPARTS = {"youraddress", "yourname", "your-email", "sample", "test@test"}
 
+# 収集スクリプトが画像・スクリプトのファイル名をアドレスとして拾うことがある。
+# 例: main_slide01_sp@3x.avif（Retina画像の @2x/@3x 記法）
+FILE_EXTENSION_TLDS = {
+    "avif", "webp", "png", "jpg", "jpeg", "gif", "svg", "ico", "bmp", "tiff",
+    "css", "js", "json", "xml", "pdf", "zip", "mp4", "webm", "woff", "woff2", "ttf",
+}
+
+# 実在しない・明らかに壊れたトップレベルドメインの形
+BROKEN_TLD_RE = re.compile(r"^[a-z]{2,24}$")
+
 FREEMAIL_DOMAINS = {
     "gmail.com", "yahoo.co.jp", "ybb.ne.jp", "hotmail.com", "hotmail.co.jp", "outlook.com",
     "outlook.jp", "icloud.com", "me.com", "docomo.ne.jp", "ezweb.ne.jp", "au.com",
@@ -68,6 +78,12 @@ def check_email(email: str) -> tuple[bool, list[str]]:
         return False, ["サンプル/プレースホルダのアドレス"]
     if domain.endswith(".example"):
         return False, ["サンプルドメイン"]
+
+    tld = domain.rsplit(".", 1)[-1]
+    if tld in FILE_EXTENSION_TLDS:
+        return False, ["ファイル名の誤検出（アドレスではない）"]
+    if not BROKEN_TLD_RE.match(tld):
+        return False, [f"トップレベルドメインが不正（.{tld}）"]
     if is_freemail(email):
         notes.append("フリーメール")
     return True, notes

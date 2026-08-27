@@ -128,3 +128,22 @@ def test_verified_contacts_are_excluded_from_the_next_plan(conn, settings, campa
 
     plans = select(conn, campaign, "email", settings).plans
     assert [p.target for p in plans] == ["c0@alive.jp"]
+
+
+def test_cached_verdicts_survive_a_reimport(conn, fake_mx):
+    """リストを再取り込みしても、検証で外した宛先が復活しない。"""
+    from dm.db import upsert_contacts
+
+    fake_mx({"dead.jp": False})
+    _contacts(conn, "dead.jp")
+    v.verify_email_domains(conn)
+    assert conn.execute("SELECT email_ok FROM contacts").fetchone()["email_ok"] == 0
+
+    # 取り込みと同じ経路で email_ok=1 に戻す
+    row = dict(conn.execute("SELECT * FROM contacts").fetchone())
+    row["email_ok"] = 1
+    upsert_contacts(conn, [row])
+    assert conn.execute("SELECT email_ok FROM contacts").fetchone()["email_ok"] == 1
+
+    assert v.apply_cached_verdicts(conn) == 1
+    assert conn.execute("SELECT email_ok FROM contacts").fetchone()["email_ok"] == 0
