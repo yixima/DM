@@ -155,7 +155,8 @@ class Settings:
     contacts_csv: Path = ROOT / "data" / "master_contacts_20260825_181226.csv"
     # 別セッション（Cowork 等）が書き出すフォルダ。設定するとその中の最新CSVを自動で使う。
     contacts_dir: Path | None = None
-    contacts_glob: str = "master_contacts_*.csv"
+    # ** を付けてサブフォルダも探す。書き出しのたびに新しいフォルダが作られる構成に対応する。
+    contacts_glob: str = "**/master_contacts_*.csv"
     # 取り込みで使える宛先がこの割合を超えて減ったら中止する（書き出し失敗の検知）
     max_shrink_percent: float = 20.0
     db_path: Path = ROOT / "state" / "dm.sqlite3"

@@ -376,10 +376,15 @@ Mailchimp・Benchmark Email などの配信サービスは、**ウェブサイ�
 `.env` に1行足すのがいちばん簡単です。
 
 ```bash
-DM_CONTACTS_DIR="/Users/<ユーザー名>/Shared/dm-lists"
-DM_CONTACTS_GLOB="master_contacts_*.csv"      # 省略可
+DM_CONTACTS_DIR="/Users/<ユーザー名>/Dropbox/outreach_starter_kit_v1/master"
 ```
 
+このフォルダ**以下**を再帰的に探し、いちばん新しい `master_contacts_*.csv` を取り込みます。
+**書き出しのたびに `integration_<日時>/` のような新しいサブフォルダが作られる構成でも、
+そのまま追随します。** 平置きのフォルダでも同じ設定で動きます。
+
+対象のファイル名を変えたい場合のみ `DM_CONTACTS_GLOB` を指定します
+（既定は `**/master_contacts_*.csv`）。
 `config/settings.yaml` の `paths.contacts_dir` に書いても同じです（環境変数が優先）。
 
 ```bash

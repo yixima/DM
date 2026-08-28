@@ -63,7 +63,8 @@ form_profile:
   url: ""
 
 # 別セッション（Cowork 等）がCSVを書き出すフォルダを監視する場合はここに書く。
-# 設定すると `dm import` は、このフォルダ内で contacts_glob に一致する
+# 設定すると `dm import` は、このフォルダ以下で contacts_glob に一致する
 # 最も新しいファイルを自動で選ぶ。単一ファイルを使うなら contacts_csv のままでよい。
-#   例: contacts_dir: /Users/<ユーザー名>/Shared/dm-lists
-#       contacts_glob: "master_contacts_*.csv"
+# contacts_glob の既定は "**/master_contacts_*.csv"。** はサブフォルダも探す指定で、
+# 書き出しのたびに新しいフォルダが作られる構成に対応する。平置きでもそのまま動く。
+#   例: contacts_dir: "/Users/<ユーザー名>/Dropbox/outreach_starter_kit_v1/master"

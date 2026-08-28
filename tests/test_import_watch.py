@@ -129,3 +129,39 @@ def test_tilde_in_the_path_is_expanded(monkeypatch):
     assert settings.contacts_dir is not None
     assert "~" not in str(settings.contacts_dir)
     assert settings.contacts_dir.is_absolute()
+
+
+def test_newest_csv_is_found_in_nested_output_folders(tmp_path):
+    """書き出しのたびに新しいサブフォルダが作られる構成（Cowork の実際の形）。"""
+    base = tmp_path / "JAPAN PROMOTION Dropbox" / "営業先開拓" / "outreach_starter_kit_v1" / "master"
+    old = make_csv(base / "integration_20260825_181226" / "master_contacts_20260825_181226.csv", 3)
+    new = make_csv(base / "integration_20260828_141509" / "master_contacts_20260828_141509.csv", 3)
+
+    import os
+    os.utime(old, (1_700_000_000, 1_700_000_000))
+    os.utime(new, (1_800_000_000, 1_800_000_000))
+
+    assert find_latest_csv(base, "**/master_contacts_*.csv") == new
+
+
+def test_flat_folders_still_work_with_the_recursive_pattern(tmp_path):
+    """サブフォルダを作らない書き出し方でも、同じ設定のまま拾える。"""
+    folder = tmp_path / "lists"
+    target = make_csv(folder / "master_contacts_20260901_090000.csv", 3)
+    assert find_latest_csv(folder, "**/master_contacts_*.csv") == target
+
+
+def test_nested_pattern_is_the_default(monkeypatch):
+    from dm.config import load_settings
+
+    monkeypatch.delenv("DM_CONTACTS_GLOB", raising=False)
+    assert load_settings().contacts_glob == "**/master_contacts_*.csv"
+
+
+def test_paths_with_spaces_and_japanese_are_handled(monkeypatch, tmp_path):
+    from dm.config import load_settings
+
+    folder = tmp_path / "JAPAN PROMOTION Dropbox" / "営業 先開拓"
+    folder.mkdir(parents=True)
+    monkeypatch.setenv("DM_CONTACTS_DIR", str(folder))
+    assert load_settings().contacts_dir == folder
